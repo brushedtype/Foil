@@ -40,7 +40,7 @@ public protocol UserDefaultsSerializable {
     /// Initializes the object using the provided value.
     ///
     /// - Parameter storedValue: The previously store value fetched from `UserDefaults`.
-    init(storedValue: StoredValue)
+    init?(storedValue: StoredValue)
 }
 
 /// :nodoc:
@@ -130,8 +130,17 @@ extension Array: UserDefaultsSerializable where Element: UserDefaultsSerializabl
         self.map { $0.storedValue }
     }
 
-    public init(storedValue: [Element.StoredValue]) {
-        self = storedValue.map { Element(storedValue: $0) }
+    public init?(storedValue: [Element.StoredValue]) {
+        var elements: [Element] = []
+
+        for value in storedValue {
+            guard let element = Element(storedValue: value) else {
+                return nil
+            }
+            elements.append(element)
+        }
+
+        self = elements
     }
 }
 
@@ -141,8 +150,17 @@ extension Set: UserDefaultsSerializable where Element: UserDefaultsSerializable 
         self.map { $0.storedValue }
     }
 
-    public init(storedValue: [Element.StoredValue]) {
-        self = Set(storedValue.map { Element(storedValue: $0) })
+    public init?(storedValue: [Element.StoredValue]) {
+        var elements: [Element] = []
+
+        for value in storedValue {
+            guard let element = Element(storedValue: value) else {
+                return nil
+            }
+            elements.append(element)
+        }
+
+        self = Set(elements)
     }
 }
 
@@ -152,8 +170,14 @@ extension Dictionary: UserDefaultsSerializable where Key == String, Value: UserD
         self.mapValues { $0.storedValue }
     }
 
-    public init(storedValue: [String: Value.StoredValue]) {
-        self = storedValue.mapValues { Value(storedValue: $0) }
+    public init?(storedValue: [String: Value.StoredValue]) {
+        let dict = try? storedValue.mapValues { try Value(storedValue: $0).tryUnwrap() }
+
+        guard let dict else {
+            return nil
+        }
+
+        self = dict
     }
 }
 
@@ -161,7 +185,25 @@ extension Dictionary: UserDefaultsSerializable where Key == String, Value: UserD
 extension UserDefaultsSerializable where Self: RawRepresentable, Self.RawValue: UserDefaultsSerializable {
     public var storedValue: RawValue.StoredValue { self.rawValue.storedValue }
 
-    public init(storedValue: RawValue.StoredValue) {
-        self = Self(rawValue: Self.RawValue(storedValue: storedValue))!
+    public init?(storedValue: RawValue.StoredValue) {
+        guard let rawValue = Self.RawValue(storedValue: storedValue) else {
+            return nil
+        }
+        self.init(rawValue: rawValue)
     }
+}
+
+extension Optional {
+
+    enum UnwrapError: Error {
+        case foundNil
+    }
+
+    func tryUnwrap() throws -> Wrapped {
+        guard case .some(let wrapped) = self else {
+            throw UnwrapError.foundNil
+        }
+        return wrapped
+    }
+
 }

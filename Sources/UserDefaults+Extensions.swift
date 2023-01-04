@@ -32,8 +32,8 @@ extension UserDefaults {
         self.removeObject(forKey: key)
     }
 
-    func fetch<T: UserDefaultsSerializable>(_ key: String) -> T {
-        self.fetchOptional(key)!
+    func fetch<T: UserDefaultsSerializable>(_ key: String) throws -> T {
+        try self.fetchOptional(key).tryUnwrap()
     }
 
     func fetchOptional<T: UserDefaultsSerializable>(_ key: String) -> T? {
@@ -52,7 +52,11 @@ extension UserDefaults {
             return nil
         }
 
-        return T(storedValue: fetched as! T.StoredValue)
+        guard let storedValue = fetched as? T.StoredValue else {
+            return nil
+        }
+
+        return T(storedValue: storedValue)
     }
 
     func registerDefault<T: UserDefaultsSerializable>(value: T, key: String) {

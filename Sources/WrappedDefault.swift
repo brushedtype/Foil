@@ -28,7 +28,7 @@ public struct WrappedDefault<T: UserDefaultsSerializable> {
     /// The value retrieved from `UserDefaults`.
     public var wrappedValue: T {
         get {
-            self._userDefaults.fetch(self.key)
+            try! self._userDefaults.fetch(self.key)
         }
         set {
             self._userDefaults.save(newValue, for: self.key)
@@ -50,13 +50,23 @@ public struct WrappedDefault<T: UserDefaultsSerializable> {
         self._userDefaults = userDefaults
         userDefaults.registerDefault(value: wrappedValue, key: keyName)
 
-        // Publisher must be initialized after `registerDefault`,
-        // because `fetch` assumes that `registerDefault` has been called before
-        // and uses force unwrap
-        self._publisher = CurrentValueSubject<T, Never>(userDefaults.fetch(keyName))
+        // error is thrown if there was an error decoding the stored value
+        do {
+            let storedValue: T = try userDefaults.fetch(keyName)
+            self._publisher = CurrentValueSubject<T, Never>(storedValue)
+
+        } catch {
+            // when we catch an error, we reset the user default value. in some situations that may be OK
+            // but in others we may want to recover in a different way...
+            self._userDefaults.delete(for: keyName)
+
+            // set the initial value to the wrapped value
+            self._publisher = CurrentValueSubject<T, Never>(wrappedValue)
+        }
 
         self._observer = ObserverTrampoline(userDefaults: userDefaults, key: keyName) { [unowned _publisher] in
-            _publisher.send(userDefaults.fetch(keyName))
+            // TODO: handle default being set to value that cannot be decoded
+            _publisher.send(try! userDefaults.fetch(keyName))
         }
     }
 }
